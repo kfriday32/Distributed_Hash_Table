@@ -1,0 +1,90 @@
+Author:  Kristen Friday
+Date:    September 28, 2021
+Subject: Concurrency and Discovery
+
+
+Throughput Data:
+
+**throughput measured in operations/second
+
+
+ # of Clients |   Client  |  Insert  |  Lookup  |  Scan  |  Remove
+------------------------------------------------------------------------
+      1       |   Total   |   423    |   4816   |  332   |    515
+------------------------------------------------------------------------
+      2       |    #1     |   272    |   5575   |  685   |    279
+              |    #2     |   272    |   5536   |  683   |    279
+              |   Total   |   544    |   11111  |  1368  |    558
+------------------------------------------------------------------------
+      3       |    #1     |   292    |   5397   |  514   |    297
+              |    #2     |   146    |   5348   |  509   |    150
+              |    #3     |   146    |   5288   |  510   |    150
+              |   Total   |   584    |   16033  |  1533  |    597
+------------------------------------------------------------------------
+      4       |    #1     |   182    |   5311   |  616   |    185
+              |    #2     |   182    |   5293   |  616   |    185
+              |    #3     |   91     |   5271   |  615   |    93
+              |    #4     |   91     |   5248   |  615   |    92
+              |   Total   |   546    |   21123  |  2462  |    555
+------------------------------------------------------------------------
+      5       |    #1     |   137    |   5257   |  505   |    141
+              |    #2     |   137    |   5224   |  504   |    141
+              |    #3     |   69     |   5208   |  504   |    140
+              |    #4     |   138    |   5315   |  1006  |    70
+              |    #5     |   68     |   5188   |  503   |    70
+              |   Total   |   549    |   26192  |  3022  |    562
+------------------------------------------------------------------------
+      6       |    #1     |   104    |   4962   |  951   |    105
+              |    #2     |   103    |   4934   |  950   |    105
+              |    #3     |   105    |   4897   |  476   |    105
+              |    #4     |   104    |   4862   |  475   |    53
+              |    #5     |   52     |   4846   |  474   |    53
+              |    #6     |   52     |   4812   |  474   |    105
+              |   Total   |   520    |   30313  |  3800  |    526
+------------------------------------------------------------------------
+      7       |    #1     |   90     |   4934   |  830   |    95
+              |    #2     |   90     |   4872   |  829   |    95
+              |    #3     |   90     |   4818   |  416   |    95
+              |    #4     |   89     |   4757   |  412   |    95
+              |    #5     |   89     |   4731   |  414   |    95
+              |    #6     |   45     |   4676   |  412   |    48
+              |    #7     |   45     |   4667   |  824   |    48
+              |   Total   |   538    |   33455  |  4137  |    476
+
+
+
+
+Performance Analysis:
+
+
+As shown from the raw data above, the total throughput of all clients averages out to 
+about 540 operations/second for the insert method and about 550 operations/second
+for the remove operation. As the number of clients increases, these 2 values do not waver
+signficantly. Rather, the throughput of the individual clients decreases, but the total
+sum averages out to hover around a single value. This makes sense in the context of the
+distributed system because once it reaches the physical capacity of the hardware, the
+total throughput cannot scale any higher. It essentially levels off at a maximum threshold 
+where adding more clients will not improve performance.
+
+Contrastingly, as the number of clients increases, the total throughput for the lookup 
+and scan operations continues to increase. The throughput for each individual client
+on the lookup and scan operations remains about the same so the total continues to increase
+with each additional client in a linear fashion.
+
+These distinctions between the insert/remove operations and the scan/lookup operations reveal
+interesting characteristics of the system. Because the scan and lookup operations do not
+modify the hash table or have their transactions tracked in the log, each additional client 
+can produce the same throughput resulting in a constantly increasing total throughput. The fact
+that the total on the insert and remove operations levels off shows that these operations are 
+limited by the internal hardware (bounded by a max threshold). This is most likely due to the 
+fact that insertion and deletion modify the hash table and write transactions to the disk with 
+each request. As a result of the persistent storage of insert/removal transactions and the 
+modifying nature of insert and delete, they are both bounded at a plateau value.
+                
+Another interesting observation is that the throughput for each individual client during
+the scan and lookup operations is relatively constant in comparison to other clients running
+simultaneously. On the other hand, the throughput for individual clients during insert
+and remove may have a high throughput and then all of the sudden, the value drops in half
+for the next client. This data reveals that the server does not send back data equally to
+all clients, but rather sends out responses as fast as possible in hopes that each
+client is addressed with a similar level of performance. 
