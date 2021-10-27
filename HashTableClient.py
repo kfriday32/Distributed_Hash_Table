@@ -19,6 +19,12 @@ NAME_HOST = 'catalog.cse.nd.edu:9097'
 
 class HashTableClient:
 
+    def __init__(self):
+        '''Constructore for HashTableClient'''
+
+        self.server = None
+
+
     def connect_to_server(self, host, port):
         '''Return a socket that connects client to host and port'''
 
@@ -131,4 +137,4 @@ class HashTableClient:
             except KeyError:
                 continue
 
-        return server
+        self.server = server
