@@ -2,16 +2,16 @@
 
 # TestPerf.py
 # Author: Kristen Friday
-# Date: September 5, 2021
+# Date: October 31, 2021
 
 import sys
 import random
 import string
 import time
-import HashTableClient
+import ClusterClient
 
 
-def time_insert(client, sock):
+def time_insert(client):
     '''Measure latency and bandwith of insert operation'''
 
     count = 0
@@ -21,7 +21,7 @@ def time_insert(client, sock):
         op_start = time.time_ns()
         new_key = (random.choice(string.ascii_letters) + \
                 random.choice(string.ascii_letters)) * int((1+random.random()) * 3)
-        response = client.insert(str(count), new_key, sock)
+        response = client.insert(str(count), new_key)
         op_end = time.time_ns()
         op_elap = op_end - op_start
         count += 1
@@ -36,7 +36,7 @@ def time_insert(client, sock):
     print(f"Latency (avg time/op): {elapsed / count:.0f} nanoseconds/op\n")
 
 
-def time_lookup(client, sock):
+def time_lookup(client):
     '''Measure latency and bandwith of lookup operation'''
 
     count = 0
@@ -45,7 +45,7 @@ def time_lookup(client, sock):
     # lookup all items in the dictionary
     while time.time_ns() - start < 3000000000: 
         op_start = time.time_ns()
-        response = client.lookup(str(count), sock)
+        response = client.lookup(str(count))
         op_end = time.time_ns()
         op_elap = op_end - op_start
         count += 1
@@ -59,7 +59,7 @@ def time_lookup(client, sock):
     print(f"Latency (avg time/op): {elapsed / count:.0f} nanoseconds/op\n")
 
 
-def time_scan(client, sock):
+def time_scan(client):
     '''Measure latency and bandwith of scan operation'''
 
     count = 0
@@ -69,7 +69,7 @@ def time_scan(client, sock):
     while time.time_ns() - start < 3000000000: 
         op_start = time.time_ns()
         regex = r'.*'
-        response = client.scan(regex, sock)
+        response = client.scan(regex)
         op_end = time.time_ns()
         op_elap = op_end - op_start
         count += 1
@@ -83,7 +83,7 @@ def time_scan(client, sock):
     print(f"Latency (avg time/op): {elapsed / count:.0f} nanoseconds/op\n")
 
 
-def time_remove(client, sock):
+def time_remove(client):
     '''Measure latency and bandwith of remove operation'''
 
     count = 0
@@ -92,7 +92,7 @@ def time_remove(client, sock):
     # remove all items in the dictionary
     while time.time_ns() - start < 3000000000: 
         op_start = time.time_ns()
-        response = client.remove(str(count), sock)
+        response = client.remove(str(count))
         op_end = time.time_ns()
         op_elap = op_end - op_start
         count += 1
@@ -107,41 +107,33 @@ def time_remove(client, sock):
 
 
 def get_cml_args():
-    '''Get host and port number from command line'''
+    '''Get project name from command line'''
 
-    if (len(sys.argv) != 2):
-        print(f'Usage: ./TestPerf.py [PROJECT]')
+    if (len(sys.argv) != 4):
+        print(f'Usage: ./TestPerf.py [NAME] [N] [K]')
         return None
 
-    return sys.argv[1]
+    return sys.argv[1:]
 
 
 def main():
     '''Runner function to test performance of each operation'''
 
-    project = get_cml_args()
-    if not project:
+    args = get_cml_args()
+    if not args:
         return 1
 
-    client = HashTableClient.HashTableClient()
-    server = client.locate_server(project)
-    if not server:
-        print('Error: Could not locate project in name server')
-        return 1
+    project, n, k = args
+    n = int(n)
+    k = int(k)
 
-    host = server["address"]
-    port = server["port"]
-
-    sock = client.connect_to_server(host, port)
-    if not sock:
-        print(f'ERROR: Could not connect to {host} at port {port}')
-        return 1
+    cluster_client = ClusterClient.ClusterClient(n, k, project)
 
     print("Processing requests...\n")
-    time_insert(client, sock)
-    time_lookup(client, sock)
-    time_scan(client, sock)
-    time_remove(client, sock)
+    time_insert(cluster_client)
+    time_lookup(cluster_client)
+    time_scan(cluster_client)
+    time_remove(cluster_client)
     print("Done processing requests")
 
 

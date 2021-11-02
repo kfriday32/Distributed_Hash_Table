@@ -11,6 +11,8 @@ import json
 import time
 import http.client
 import HashTableClient
+import hashlib
+import sys
 
 
 class ClusterClient:
@@ -30,7 +32,7 @@ class ClusterClient:
 
             if not new_client.server:
                 print('Error: Could not locate project in name server')
-                return 1
+                sys.exit()
 
             self.servers[serv_name] = new_client
 
@@ -40,12 +42,15 @@ class ClusterClient:
 
         host = client.server["name"]
         port = client.server["port"]
-        sock = client.connect_to_server(host, port)
-        if not sock:
-            print(f'ERROR: Could not connect to {host} at port {port}')
-            return 1
 
-        return client.process_request(sock, message, 1)
+        try:
+            sock = client.connect_to_server(host, port)
+        except ConnectionRefusedError:
+            message = f"Could not connect to {host} at port {port}"
+            return {"status": "Failure",
+                    "result": message}
+
+        return client.process_request(sock, message)
 
 
     def insert(self, key, value):
@@ -61,12 +66,29 @@ class ClusterClient:
 
         response = None
         for client in clients:
-            response = self.call_operation(client, message)
-            if (response["status"] == "Invalid Request"):
+            try:
+                response = self.call_operation(client, message)
+            except TypeError:
+                response = {
+                    "status": "Invalid Request",
+                    "error": "TypeError"
+                }
                 break
+            except ValueError:
+                response = {
+                    "status": "Invalid Request",
+                    "error": "ValueError"
+                }
+                break
+            except socket.error:
+                response = {
+                    "status": "Failure",
+                    "error": "socket.error"
+                }
             while (response["status"] == "Failure"):
                 # sleep for 5 seconds and then retry
                 time.sleep(5)
+                client.locate_server(client.server["project"])
                 response = self.call_operation(client, message)
 
         return response
@@ -82,15 +104,44 @@ class ClusterClient:
         
         clients = self.find_clients(key)
         
+        key_errors = 0
         response = None
-        for client in clients:
-            response = self.call_operation(client, message)
-            if (response["status"] == "Invalid Request"):
-                break
-            while (response["status"] == "Failure"):
-                # sleep for 5 seconds and then retry
-                time.sleep(5)
-                response = self.call_operation(client, message)
+        while (1):
+            for client in clients:
+                try:
+                    response = self.call_operation(client, message)
+                except TypeError: 
+                    return {
+                        "status": "Invalid Request",
+                        "error": "TypeError"
+                    }
+                except KeyError:
+                    response = {
+                        "status": "Success",
+                        "error": "KeyError"
+                    }
+                    key_errors += 1
+                except ValueError:
+                    return {
+                        "status": "Invalid Request",
+                        "error": "ValueError"
+                    }
+                except socket.error:
+                    response = {
+                        "status": "Failure",
+                        "error": "socket.error"
+                    }
+                if (response["status"] == "Success"):
+                    return response
+        
+            if (key_errors == len(clients)):
+                return response
+            else:
+                key_errors = 0
+
+            # sleep for 5 seconds and then retry
+            time.sleep(5)
+            clients = self.find_clients(key)
 
         return response
        
@@ -107,9 +158,33 @@ class ClusterClient:
 
         response = None
         for client in clients:
-            response = self.call_operation(client, message)
-            if (response["status"] == "Invalid Request"):
-                break
+            try: 
+                response = self.call_operation(client, message)
+            except TypeError: 
+                return {
+                    "status": "Invalid Request",
+                    "error": "TypeError"
+                }
+            except KeyError:
+                response = {
+                    "status": "Success",
+                    "error": "KeyError"
+                }
+            except ValueError:
+                return {
+                    "status": "Invalid Request",
+                    "error": "ValueError"
+                } 
+            except socket.error:
+                response = {
+                    "status": "Failure",
+                    "error": "socket.error"
+                }
+            while (response["status"] == "Failure"):
+                # sleep for 5 seconds and then retry
+                time.sleep(5)
+                client.locate_server(client.server["project"])
+                response = self.call_operation(client, message)
 
         return response
 
@@ -122,14 +197,56 @@ class ClusterClient:
             "regex": regex,
         }
 
+        response = None
+        results = {}
         for client in self.servers.values():
-            print(self.call_operation(client, message))
+            try:
+                response = self.call_operation(client, message)
+            except TypeError: 
+                return {
+                    "status": "Invalid Request",
+                    "error": "TypeError"
+                }
+            except ValueError:
+                return {
+                    "status": "Invalid Request",
+                    "error": "ValueError"
+                }
+            except socket.error:
+                response = {
+                    "status": "Failure",
+                    "error": "socket.error"
+                }
+            while (response["status"] == "Failure"):
+                # sleep for 5 seconds and then retry
+                time.sleep(5)
+                clients = self.find_clients(key)
+                response = self.call_operation(client, message)
+            
+            if (type(response["result"]) == str):
+                return response
+            
+            for item in response["result"]:
+                results[item[0]] = item
+
+        response["result"] = list(results.values())
+
+        return response
         
 
     def hash_server(self, key):
         '''Function that returns a hash value for a given key'''
 
-        return hash(key) % self.n
+        try:
+            hash_digest = hashlib.sha256(key.encode('utf-8')).hexdigest()
+            hash_num = int(hash_digest, 16)
+
+            return hash_num % self.n
+
+        # return 0 for the server is key can't be hashed
+        # will throw invalid request response later
+        except AttributeError:
+            return 0
 
 
     def find_clients(self, key):
@@ -139,14 +256,15 @@ class ClusterClient:
         clients = []
         server_num = self.hash_server(key)
 
-        for i in range(self.k):
-            server_num += i
+        for _ in range(self.k):
 
             if (server_num >= self.n):
                 server_num = 0
 
             serv_name = self.project + "-" + str(server_num)
             clients.append(self.servers[serv_name])
+            
+            server_num += 1
 
         return clients
 

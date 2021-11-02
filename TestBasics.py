@@ -96,6 +96,10 @@ def test_scan(client):
     regex = None
     response = client.scan(regex)
     print(response)
+    
+    regex = "^.*"
+    response = client.scan(regex)
+    print(response)
 
 
 def test_edge_cases(client):
@@ -105,6 +109,11 @@ def test_edge_cases(client):
     print(response)
     response = client.lookup("Sean")
     print(response)
+    
+    regex = "^.*"
+    response = client.scan(regex)
+    print(response)
+
     response = client.remove("Sean")
     print(response)
     response = client.lookup("Sean")
@@ -126,19 +135,20 @@ def get_cml_args():
 def main():
     '''Runner function to test basic functionality'''
 
-    proj_name, n, k = get_cml_args()
+    args = get_cml_args()
+    if not args:
+        return 1
+
+    proj_name, n, k = args
     n = int(n)
     k = int(k)
-
-    if not proj_name:
-        return 1
 
     cluster_client = ClusterClient.ClusterClient(n, k, proj_name)
     
     test_insert(cluster_client)
     test_lookup(cluster_client)
     test_remove(cluster_client)
-    #test_scan(cluster_client)
+    test_scan(cluster_client)
     #test_edge_cases(cluster_client)
 
 

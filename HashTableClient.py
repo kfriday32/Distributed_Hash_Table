@@ -11,6 +11,7 @@ import socket
 import json
 import time
 import http.client
+import re
 
 
 BYTES = 1024
@@ -37,11 +38,11 @@ class HashTableClient:
             return client_socket
 
 
-    def process_request(self, sock, message, retries):
+    def process_request(self, sock, message):
         '''Send request to server and receive response back'''
        
         try:
-            req_info = json.dumps(message)
+           req_info = json.dumps(message)
         except ValueError as err:
             raise ValueError
 
@@ -55,17 +56,21 @@ class HashTableClient:
                 res += sock.recv(BYTES).decode('utf-8')
 
             res_json = json.loads(res)
-
-            # retry 5 times
-            if res_json["status"] == "Failure" and retries < 5:
-                retries += 1
-                time.sleep(3)
-                return self.process_request(sock, message, retries)
+            if ("error" in res_json):
+                err = res_json["error"]
+                if err == 'TypeError':
+                    raise TypeError
+                elif err == 'KeyError':
+                    raise KeyError
+                elif err == 're.error':
+                    raise re.error
+                else:
+                    print(err)
 
             return res_json
 
-        except socket.error as err:
-            raise err
+        except socket.error:
+            raise socket.error
 
 
     def insert(self, key, value, socket):
@@ -77,7 +82,7 @@ class HashTableClient:
             "value": value
         }
 
-        return self.process_request(socket, message, 1)
+        return self.process_request(socket, message)
 
 
     def lookup(self, key, socket):
@@ -88,7 +93,7 @@ class HashTableClient:
             "key": key,
         }
         
-        return self.process_request(socket, message, 1)
+        return self.process_request(socket, message)
 
 
     def remove(self, key, socket):
@@ -99,7 +104,7 @@ class HashTableClient:
             "key": key
         }
         
-        return self.process_request(socket, message, 1)
+        return self.process_request(socket, message)
 
 
     def scan(self, regex, socket):
@@ -110,7 +115,7 @@ class HashTableClient:
             "regex": regex,
         }
         
-        return self.process_request(socket, message, 1)
+        return self.process_request(socket, message)
 
 
     def locate_server(self, proj_name):

@@ -38,8 +38,8 @@ class HashTable:
         try:
             value = self.dictionary[key]
             return value
-        except KeyError as err:
-            return 'ERROR: KeyError'
+        except KeyError:
+            return 'KeyError'
 
     
     def remove(self, key):
@@ -50,7 +50,7 @@ class HashTable:
             value = self.dictionary.pop(key)
             return value
         except KeyError:
-            return 'ERROR: KeyError'
+            return 'KeyError'
 
     
     def scan(self, reg_string):
@@ -61,8 +61,7 @@ class HashTable:
         try:
             regex = re.compile(reg_string)
         except re.error as err:
-            return f'ERROR: {err}'
-
+            return 're.error'
         matches = [(k, v) for k, v in self.dictionary.items() if regex.search(k)]
 
         return matches

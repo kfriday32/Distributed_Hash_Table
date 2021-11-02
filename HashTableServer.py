@@ -15,6 +15,7 @@ import HashTable
 import os
 import select
 import time
+import re
 
 
 # host is all available interfaces
@@ -74,10 +75,9 @@ class HashTableServer:
     def respond_with_failure(self, err, status="Failure"):
         '''Package error message for server response'''
 
-        result = f'ERROR: {err}'
         res = {
             "status": status,
-            "result": result
+            "error": err
         }
 
         return self.form_response(res)
@@ -119,6 +119,11 @@ class HashTableServer:
             result = self.hash_table.scan(req["regex"])
         else:
             raise KeyError
+        
+        if (result == "KeyError"):
+            raise KeyError
+        elif (result == "re.error"):
+            raise re.error
 
         res = {
             "status": "Success",
@@ -150,8 +155,8 @@ class HashTableServer:
             # split data received at first comma to get total bytes
             total_bytes, req = data.split(',',1)
             total_bytes = int(total_bytes)
-        except ValueError as err:
-            client_conn.sendall(self.respond_with_failure(err, "Invalid Request"))
+        except ValueError:
+            client_conn.sendall(self.respond_with_failure(ValueError, "Invalid Request"))
             return True
 
         # ensure that all data packets are received in request
@@ -161,7 +166,7 @@ class HashTableServer:
         try:
             json_data = json.loads(req)
         except ValueError:
-            client_conn.sendall(self.respond_with_failure("Failed to load JSON",
+            client_conn.sendall(self.respond_with_failure("ValueError",
                 "Invalid Request"))
             return True
 
@@ -353,8 +358,11 @@ def main():
                     hash_server.client_socks.pop(sock_addr)
                     print(f'Server: Disconnecting {sock_addr}')
                     sock.close()
-            except socket.error as err:
-                sock.sendall(hash_server.respond_with_failure(err))
+            except socket.error:
+                hash_server.client_socks.pop(sock_addr)
+                print(f'Server: Disconnecting {sock_addr}')
+                sock.close()
+                break
 
     serv_socket.close()
     name_sock.close()
